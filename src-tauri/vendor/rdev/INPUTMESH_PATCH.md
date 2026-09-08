@@ -12,3 +12,8 @@ The patch also exposes native macOS pointer deltas, includes dragged mouse
 events, and tags rdev-generated CoreGraphics events with a fixed user-data
 marker. The grab callback uses that marker to prevent injected remote input
 from being captured and sent back as new physical input.
+
+The macOS simulator tracks injected mouse-button state so pointer movement is
+posted as `LeftMouseDragged`, `RightMouseDragged`, or `OtherMouseDragged` while
+the corresponding button is held. This lets Finder and application windows
+render remote drags continuously instead of updating only on button release.

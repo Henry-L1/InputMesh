@@ -32,6 +32,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { Toggle } from "./components/Toggle";
 import * as api from "./lib/api";
 import type { ActivityLog, AppSnapshot, SharingSettings } from "./types";
+import packageInfo from "../package.json";
 
 type PageId = "layout" | "devices" | "settings" | "logs";
 type LogFilter = "all" | ActivityLog["level"];
@@ -183,7 +184,7 @@ function App() {
           </div>
           <div className="sidebar__version">
             <span className={`presence ${serviceIsOn ? "presence--connected" : "presence--offline"}`} />
-            {api.isTauriRuntime ? "本机服务 · v0.1.0" : "浏览器演示模式"}
+            {api.isTauriRuntime ? `本机服务 · v${packageInfo.version}` : "浏览器演示模式"}
           </div>
         </div>
       </aside>

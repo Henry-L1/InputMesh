@@ -536,8 +536,6 @@ impl ScreenTopology {
         let source_top = f64::from(source.y);
         let source_right = source_left + f64::from(source.width);
         let source_bottom = source_top + f64::from(source.height);
-        let source_center_x = (source_left + source_right) / 2.0;
-        let source_center_y = (source_top + source_bottom) / 2.0;
         let exit_perpendicular = match direction {
             Direction::Left | Direction::Right => {
                 source_top + edge_fraction * f64::from(source.height)
@@ -555,32 +553,34 @@ impl ScreenTopology {
                 let top = f64::from(candidate.y);
                 let right = left + f64::from(candidate.width);
                 let bottom = top + f64::from(candidate.height);
-                let center_x = (left + right) / 2.0;
-                let center_y = (top + bottom) / 2.0;
-
                 let (is_directional, primary_gap, perpendicular_gap) = match direction {
                     Direction::Right => (
-                        center_x > source_center_x,
+                        left >= source_right,
                         (left - source_right).max(0.0),
                         distance_to_interval(exit_perpendicular, top, bottom),
                     ),
                     Direction::Left => (
-                        center_x < source_center_x,
+                        right <= source_left,
                         (source_left - right).max(0.0),
                         distance_to_interval(exit_perpendicular, top, bottom),
                     ),
                     Direction::Down => (
-                        center_y > source_center_y,
+                        top >= source_bottom,
                         (top - source_bottom).max(0.0),
                         distance_to_interval(exit_perpendicular, left, right),
                     ),
                     Direction::Up => (
-                        center_y < source_center_y,
+                        bottom <= source_top,
                         (source_top - bottom).max(0.0),
                         distance_to_interval(exit_perpendicular, left, right),
                     ),
                 };
-                is_directional.then_some((candidate, primary_gap.hypot(perpendicular_gap)))
+                // A screen can only be entered through the part of the exit
+                // edge it actually overlaps. A merely diagonal screen must not
+                // become a left/right neighbour just because its centre is on
+                // that side of the source.
+                (is_directional && perpendicular_gap == 0.0)
+                    .then_some((candidate, primary_gap))
             })
             .min_by(|(left_screen, left_score), (right_screen, right_score)| {
                 left_score
@@ -971,6 +971,38 @@ mod tests {
         assert_eq!(moved.position.screen_id, "movable");
         assert_close(moved.position.x, 97.0);
         assert_eq!(moved.transitions[0].direction, Direction::Left);
+    }
+
+    #[test]
+    fn vertically_stacked_offset_screen_is_not_a_horizontal_neighbour() {
+        let topology = ScreenTopology::new(vec![
+            screen("windows-above", 0, 0, 150, 100, 2),
+            screen("mac-below", 100, 100, 100, 100, 1),
+        ])
+        .unwrap();
+
+        let moved_left = topology
+            .move_pointer_by("mac-below", 2.0, 50.0, -5.0, 0.0)
+            .unwrap();
+        assert_eq!(moved_left.position.screen_id, "mac-below");
+        assert_eq!(moved_left.blocked_directions, vec![Direction::Left]);
+
+        let moved_up = topology
+            .move_pointer_by("mac-below", 40.0, 2.0, 0.0, -5.0)
+            .unwrap();
+        assert_eq!(moved_up.position.screen_id, "windows-above");
+        assert_eq!(moved_up.transitions[0].direction, Direction::Up);
+
+        let diagonal = ScreenTopology::new(vec![
+            screen("upper-left", -100, 0, 100, 100, 2),
+            screen("lower-right", 0, 100, 100, 100, 1),
+        ])
+        .unwrap();
+        let moved_left = diagonal
+            .move_pointer_by("lower-right", 2.0, 50.0, -5.0, 0.0)
+            .unwrap();
+        assert_eq!(moved_left.position.screen_id, "lower-right");
+        assert_eq!(moved_left.blocked_directions, vec![Direction::Left]);
     }
 
     #[test]

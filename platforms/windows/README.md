@@ -11,4 +11,4 @@ pnpm check
 pnpm tauri build
 ```
 
-For v0.1.4, publish only the filenames and SHA-256 values recorded in `releases/v0.1.4/windows/SHA256SUMS.txt`.
+For v0.1.5, publish only the filenames and SHA-256 values recorded in `releases/v0.1.5/windows/SHA256SUMS.txt`.

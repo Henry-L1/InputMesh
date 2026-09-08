@@ -40,7 +40,7 @@ Reconnect: complete Noise XX → verify stored static public key → enable inpu
 
 ## 控制权与多套输入
 
-任何节点检测到非注入的物理输入时，都可以发布一个新的控制权 claim。claim 是 `(generation, ownerDeviceId)`；节点先把自己见过的最大 generation 加一，同 generation 冲突时用设备 ID 做确定性比较。输入事件必须携带当前 claim，接收者丢弃旧 claim 的事件。
+节点检测到非注入的物理指针输入时，可以发布一个新的控制权 claim。目标电脑上的本地键盘是例外：当远端指针已经聚焦到该电脑的屏幕时，本地按键直接作用于当前焦点，不抢走指针控制权。claim 是 `(generation, ownerDeviceId)`；节点先把自己见过的最大 generation 加一，同 generation 冲突时用设备 ID 做确定性比较。输入事件必须携带当前 claim，接收者丢弃旧 claim 的事件。
 
 这实现了“用户在哪一端操作就由哪一端接管”，但不是多人同时操作模式。同一时刻只有一个逻辑控制者和一个系统焦点，从而避免两只鼠标争抢一个 OS 指针。
 
@@ -49,6 +49,10 @@ Reconnect: complete Noise XX → verify stored static public key → enable inpu
 平台层捕获原生绝对位置，运行时换算为当前屏幕内的归一化坐标。移动越过屏幕边缘时，拓扑模块选择该方向上距离最近且有重叠边的屏幕；沿边的位置按比例映射到不同分辨率的目标边。
 
 远端指针消息同时携带目标 `screenId` 与归一化位置。接收端用本机刚枚举的原生屏幕矩形换算最终注入坐标，不信任发送端提供的绝对桌面坐标。
+
+相邻屏幕必须完整位于移动方向一侧，并且包含指针离开源屏幕时的边缘坐标；仅中心点位于某方向、实际却在斜上方或斜下方的屏幕不会被当作该方向的邻居。
+
+滚轮事件保留来源单位：macOS 触控板使用像素，Windows 滚轮使用行。接收端按 `40 px/line` 换算，并在像素转行时累计不足一行的余量，避免触控板被放大或机械滚轮在 macOS 上过慢。
 
 ## 输入回环
 

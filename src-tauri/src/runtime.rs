@@ -96,6 +96,7 @@ struct ControlState {
     pointer_parking: Option<(f64, f64)>,
     remote_pressed_keys: HashSet<String>,
     remote_pressed_buttons: HashSet<String>,
+    remote_wheel_remainder: (f64, f64),
 }
 
 impl ControlState {
@@ -122,6 +123,7 @@ impl ControlState {
             pointer_parking: None,
             remote_pressed_keys: HashSet::new(),
             remote_pressed_buttons: HashSet::new(),
+            remote_wheel_remainder: (0.0, 0.0),
         }
     }
 
@@ -985,6 +987,7 @@ impl AppCore {
         control.last_remote_sequence = 0;
         control.edge_attempt = None;
         control.pointer_parking = None;
+        control.remote_wheel_remainder = (0.0, 0.0);
         tracing::debug!(%peer_id, claim_id = %claim.claim_id, "accepted control claim");
         let releases = drain_remote_releases(&mut control);
         let lease_id = control.lease_id.clone();
@@ -1120,10 +1123,23 @@ impl AppCore {
                 .into(),
                 pressed: button.state == ButtonState::Pressed,
             },
-            InputEvent::Wheel(wheel) => NativeInputEvent::Wheel {
-                delta_x: wheel.delta_x.round() as i64,
-                delta_y: wheel.delta_y.round() as i64,
-            },
+            InputEvent::Wheel(wheel) => {
+                let native_unit = if cfg!(target_os = "windows") {
+                    WheelUnit::Lines
+                } else {
+                    WheelUnit::Pixels
+                };
+                let mut control = self.control.lock();
+                let native = translate_remote_wheel(
+                    &wheel,
+                    native_unit,
+                    &mut control.remote_wheel_remainder,
+                );
+                let Some(native) = native else {
+                    return;
+                };
+                native
+            }
             InputEvent::Key(key) => {
                 let CanonicalKeyCode::Hid(code) = key.code else {
                     return;
@@ -1155,7 +1171,18 @@ impl AppCore {
         }
         let local_id = self.snapshot.read().local_device.id;
         let settings = self.snapshot.read().settings.clone();
-        let pointer_can_reclaim = local_input_can_reclaim_control(&event, &settings);
+        let focused_screen_id = self
+            .control
+            .lock()
+            .pointer
+            .as_ref()
+            .map(|pointer| pointer.screen_id.clone());
+        let focused_on_local_screen = focused_screen_id
+            .as_deref()
+            .and_then(|screen_id| self.screen_owner(screen_id))
+            == Some(local_id);
+        let pointer_can_reclaim =
+            local_input_can_reclaim_control(&event, &settings, focused_on_local_screen);
         let takeover_pointer = self.local_pointer_for_input(&event, local_id);
         let (claim, releases, claimed_screen_id) = {
             let mut control = self.control.lock();
@@ -1174,6 +1201,7 @@ impl AppCore {
                 control.last_remote_sequence = 0;
                 control.edge_attempt = None;
                 control.pointer_parking = None;
+                control.remote_wheel_remainder = (0.0, 0.0);
                 if taking_over {
                     control.pointer.clone_from(&takeover_pointer);
                 }
@@ -1631,6 +1659,7 @@ impl AppCore {
         control.last_remote_sequence = 0;
         control.edge_attempt = None;
         control.pointer_parking = None;
+        control.remote_wheel_remainder = (0.0, 0.0);
         let releases = drain_remote_releases(&mut control);
         let active_screen_id = control
             .pointer
@@ -2203,8 +2232,51 @@ fn edge_transition_ready(
     }
 }
 
-fn local_input_can_reclaim_control(event: &NativeInputEvent, settings: &SharingSettings) -> bool {
+fn local_input_can_reclaim_control(
+    event: &NativeInputEvent,
+    settings: &SharingSettings,
+    focused_on_local_screen: bool,
+) -> bool {
+    // A keyboard physically attached to the receiving computer should type at
+    // the screen already focused by the remote pointer without stealing the
+    // pointer's controller lease. Otherwise the controller's parked/hidden
+    // cursor reappears on its own desktop and the next mouse event jumps back.
+    if focused_on_local_screen && matches!(event, NativeInputEvent::Key { .. }) {
+        return false;
+    }
     settings.take_control_on_local_input || matches!(event, NativeInputEvent::PointerMoved { .. })
+}
+
+const SCROLL_PIXELS_PER_LINE: f64 = 40.0;
+
+fn translate_remote_wheel(
+    wheel: &WheelInput,
+    native_unit: WheelUnit,
+    remainder: &mut (f64, f64),
+) -> Option<NativeInputEvent> {
+    fn axis(delta: f64, source: WheelUnit, target: WheelUnit, remainder: &mut f64) -> i64 {
+        let translated = match (source, target) {
+            (WheelUnit::Pixels, WheelUnit::Lines) => {
+                let total = *remainder + delta / SCROLL_PIXELS_PER_LINE;
+                let whole = total.trunc();
+                *remainder = total - whole;
+                whole
+            }
+            (WheelUnit::Lines, WheelUnit::Pixels) => {
+                *remainder = 0.0;
+                delta * SCROLL_PIXELS_PER_LINE
+            }
+            _ => {
+                *remainder = 0.0;
+                delta
+            }
+        };
+        translated.round() as i64
+    }
+
+    let delta_x = axis(wheel.delta_x, wheel.unit, native_unit, &mut remainder.0);
+    let delta_y = axis(wheel.delta_y, wheel.unit, native_unit, &mut remainder.1);
+    (delta_x != 0 || delta_y != 0).then_some(NativeInputEvent::Wheel { delta_x, delta_y })
 }
 
 /// Native cursors are clamped to the last pixel of a display. Reaching that
@@ -2385,7 +2457,11 @@ fn native_to_wire(event: NativeInputEvent, pressed_hid: &mut HashSet<u16>) -> Op
         NativeInputEvent::Wheel { delta_x, delta_y } => Some(InputEvent::Wheel(WheelInput {
             delta_x: delta_x as f64,
             delta_y: delta_y as f64,
-            unit: WheelUnit::Lines,
+            unit: if cfg!(target_os = "macos") {
+                WheelUnit::Pixels
+            } else {
+                WheelUnit::Lines
+            },
         })),
         NativeInputEvent::Key { code, pressed } => {
             let usage = key_name_to_hid(&code)?;
@@ -2557,8 +2633,91 @@ mod tests {
             pressed: true,
         };
 
-        assert!(local_input_can_reclaim_control(&pointer, &settings));
-        assert!(!local_input_can_reclaim_control(&key, &settings));
+        assert!(local_input_can_reclaim_control(&pointer, &settings, false));
+        assert!(!local_input_can_reclaim_control(&key, &settings, false));
+    }
+
+    #[test]
+    fn target_keyboard_does_not_steal_a_remote_pointer_focused_locally() {
+        let settings = SharingSettings {
+            take_control_on_local_input: true,
+            ..SharingSettings::default()
+        };
+        let key = NativeInputEvent::Key {
+            code: "KeyA".into(),
+            pressed: true,
+        };
+        let pointer = NativeInputEvent::PointerMoved {
+            x: 10.0,
+            y: 20.0,
+            delta_x: Some(1.0),
+            delta_y: Some(0.0),
+        };
+
+        assert!(!local_input_can_reclaim_control(&key, &settings, true));
+        assert!(local_input_can_reclaim_control(&pointer, &settings, true));
+    }
+
+    #[test]
+    fn scroll_units_are_converted_and_trackpad_remainders_are_preserved() {
+        let mut remainder = (0.0, 0.0);
+        let windows_wheel = WheelInput {
+            delta_x: 0.0,
+            delta_y: 1.0,
+            unit: WheelUnit::Lines,
+        };
+        assert_eq!(
+            translate_remote_wheel(&windows_wheel, WheelUnit::Pixels, &mut remainder),
+            Some(NativeInputEvent::Wheel {
+                delta_x: 0,
+                delta_y: 40,
+            })
+        );
+
+        let mac_trackpad = WheelInput {
+            delta_x: 0.0,
+            delta_y: 10.0,
+            unit: WheelUnit::Pixels,
+        };
+        assert_eq!(
+            translate_remote_wheel(&mac_trackpad, WheelUnit::Lines, &mut remainder),
+            None
+        );
+        assert_eq!(
+            translate_remote_wheel(&mac_trackpad, WheelUnit::Lines, &mut remainder),
+            None
+        );
+        assert_eq!(
+            translate_remote_wheel(&mac_trackpad, WheelUnit::Lines, &mut remainder),
+            None
+        );
+        assert_eq!(
+            translate_remote_wheel(&mac_trackpad, WheelUnit::Lines, &mut remainder),
+            Some(NativeInputEvent::Wheel {
+                delta_x: 0,
+                delta_y: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn local_wheel_events_advertise_the_platform_native_unit() {
+        let event = native_to_wire(
+            NativeInputEvent::Wheel {
+                delta_x: 0,
+                delta_y: 1,
+            },
+            &mut HashSet::new(),
+        );
+        let expected = if cfg!(target_os = "macos") {
+            WheelUnit::Pixels
+        } else {
+            WheelUnit::Lines
+        };
+        assert!(matches!(
+            event,
+            Some(InputEvent::Wheel(WheelInput { unit, .. })) if unit == expected
+        ));
     }
 
     #[test]

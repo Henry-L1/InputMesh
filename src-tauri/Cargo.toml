@@ -1,6 +1,6 @@
 [package]
 name = "inputmesh"
-version = "0.1.4"
+version = "0.1.5"
 description = "Secure peer-to-peer keyboard and mouse sharing for Windows and macOS"
 authors = ["InputMesh contributors"]
 edition = "2024"
