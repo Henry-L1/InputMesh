@@ -85,9 +85,13 @@ jobs:
           $version = $env:TAG.TrimStart("v")
           Copy-Item (Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1).FullName "InputMesh-v$version-windows-x64-setup.exe"
           Copy-Item (Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" | Select-Object -First 1).FullName "InputMesh-v$version-windows-x64.msi"
-          Get-FileHash "InputMesh-v$version-windows-x64-setup.exe", "InputMesh-v$version-windows-x64.msi" -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } |
-            Set-Content "InputMesh-v$version-windows-x64.sha256"
+          $hashLines = Get-FileHash "InputMesh-v$version-windows-x64-setup.exe", "InputMesh-v$version-windows-x64.msi" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" }
+          [System.IO.File]::WriteAllText(
+            "InputMesh-v$version-windows-x64.sha256",
+            ($hashLines -join "`n") + "`n",
+            [System.Text.UTF8Encoding]::new($false)
+          )
       - name: Upload release assets
         shell: pwsh
         env:
