@@ -1,0 +1,50 @@
+[package]
+name = "inputmesh"
+version = "0.1.4"
+description = "Secure peer-to-peer keyboard and mouse sharing for Windows and macOS"
+authors = ["InputMesh contributors"]
+edition = "2024"
+rust-version = "1.85"
+license = "PolyForm-Noncommercial-1.0.0"
+
+[lib]
+name = "inputmesh_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "inputmesh"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+dashmap = "6.1.0"
+directories = "6.0.0"
+display-info = "0.5.9"
+hostname = "0.4.2"
+mdns-sd = "0.21.1"
+parking_lot = "0.12.5"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.10.9"
+snow = "0.10.0"
+tauri = { version = "2.11.5", features = ["tray-icon", "image-png"] }
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+uuid = { version = "1.26.0", features = ["serde", "v4"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+rdev = { version = "0.5.3", features = ["serialize", "unstable_grab"] }
+
+[patch.crates-io]
+# rdev 0.5.3 asks HIToolbox for a localized key name inside the macOS
+# event-tap thread. macOS 15 enforces that those TIS/TSM APIs run on the main
+# queue and terminates the process otherwise. InputMesh only needs physical
+# key codes, so the vendored patch skips that unsafe, unused lookup.
+rdev = { path = "vendor/rdev" }
+
+[dev-dependencies]
+tempfile = "3.23.0"

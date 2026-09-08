@@ -1,0 +1,6 @@
+minimumReleaseAgeExclude:
+  - '@types/react-dom@19.2.7'
+  - '@vitest/mocker@5.0.0'
+  - '@vitest/spy@5.0.0'
+  - lucide-react@1.40.0
+  - vitest@5.0.0

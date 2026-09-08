@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.4",
+  "tag": "v0.1.4",
+  "platforms": {
+    "windows": {
+      "architecture": "x64",
+      "sourceDirectories": [
+        "src-tauri/vendor/rdev/src/windows",
+        "tools/windows"
+      ],
+      "assets": [
+        {
+          "name": "InputMesh-v0.1.4-windows-x64-setup.exe",
+          "sha256": "c832d3cc452ffdf9fcec28f57ddc892a27702154f4684668bf1452d795175e7f"
+        },
+        {
+          "name": "InputMesh-v0.1.4-windows-x64.msi",
+          "sha256": "581536ba31d9b3ef4515f24c904c7a6267665e73d696e2d77ee19dbb6283eca2"
+        }
+      ]
+    },
+    "macos": {
+      "architecture": "arm64",
+      "sourceDirectories": [
+        "src-tauri/vendor/rdev/src/macos",
+        "tools/macos"
+      ],
+      "assets": [
+        {
+          "name": "InputMesh-v0.1.4-macos-arm64.dmg",
+          "sha256": "77985272da530e515243afc28da852db542e2d4ae299d301cde1a640193f0294"
+        },
+        {
+          "name": "InputMesh-v0.1.4-macos-arm64.app.zip",
+          "sha256": "f1b9b206711824b0b1237611ac71d10c18344bf966e3882650c1ef0bf61e0533"
+        }
+      ]
+    }
+  }
+}
