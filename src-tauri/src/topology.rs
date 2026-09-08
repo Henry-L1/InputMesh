@@ -579,8 +579,7 @@ impl ScreenTopology {
                 // edge it actually overlaps. A merely diagonal screen must not
                 // become a left/right neighbour just because its centre is on
                 // that side of the source.
-                (is_directional && perpendicular_gap == 0.0)
-                    .then_some((candidate, primary_gap))
+                (is_directional && perpendicular_gap == 0.0).then_some((candidate, primary_gap))
             })
             .min_by(|(left_screen, left_score), (right_screen, right_score)| {
                 left_score
