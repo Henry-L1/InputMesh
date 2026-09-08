@@ -444,16 +444,16 @@ impl AppCore {
     }
 
     pub fn reject_peer(&self, peer_id: DeviceId) -> Result<AppSnapshot, String> {
-        if let Some(session) = self.pair_sessions.read().get(&peer_id).cloned() {
-            if let Some(request_id) = session.remote_request_id {
-                let _ = self.send_to(
-                    peer_id,
-                    WireMessage::new(Message::PairReject(PairReject {
-                        request_id,
-                        reason: Some("用户已断开并取消信任".into()),
-                    })),
-                );
-            }
+        if let Some(session) = self.pair_sessions.read().get(&peer_id).cloned()
+            && let Some(request_id) = session.remote_request_id
+        {
+            let _ = self.send_to(
+                peer_id,
+                WireMessage::new(Message::PairReject(PairReject {
+                    request_id,
+                    reason: Some("用户已断开并取消信任".into()),
+                })),
+            );
         }
         self.config.write().remove_trusted_peer(peer_id);
         self.persist_config()?;
@@ -1218,38 +1218,33 @@ impl AppCore {
                 let mut previous_native = control.last_native_pointer.replace((x, y));
                 let local_hit = self.native_screen_at(x, y);
 
-                if let Some((screen_id, bounds)) = local_hit.as_ref() {
-                    if control.pointer.as_ref().is_none_or(|pointer| {
+                if let Some((screen_id, bounds)) = local_hit.as_ref()
+                    && control.pointer.as_ref().is_none_or(|pointer| {
                         self.screen_owner(&pointer.screen_id) == Some(local_id)
-                    }) {
-                        // Anchor topology movement at the previous native cursor
-                        // position. Anchoring at the current position and then
-                        // adding this event's delta applies every motion twice.
-                        if let Some((previous_x, previous_y)) = previous_native {
-                            if let Some((previous_screen_id, previous_bounds)) =
-                                self.native_screen_at(previous_x, previous_y)
-                            {
-                                let local_x = (previous_x - f64::from(previous_bounds.x))
-                                    .clamp(0.0, f64::from(previous_bounds.width.saturating_sub(1)));
-                                let local_y = (previous_y - f64::from(previous_bounds.y)).clamp(
-                                    0.0,
-                                    f64::from(previous_bounds.height.saturating_sub(1)),
-                                );
-                                control.pointer = Some(PointerPosition::new(
-                                    previous_screen_id,
-                                    local_x,
-                                    local_y,
-                                ));
-                            }
-                        } else {
-                            let local_x = (x - f64::from(bounds.x))
-                                .clamp(0.0, f64::from(bounds.width.saturating_sub(1)));
-                            let local_y = (y - f64::from(bounds.y))
-                                .clamp(0.0, f64::from(bounds.height.saturating_sub(1)));
+                    })
+                {
+                    // Anchor topology movement at the previous native cursor
+                    // position. Anchoring at the current position and then
+                    // adding this event's delta applies every motion twice.
+                    if let Some((previous_x, previous_y)) = previous_native {
+                        if let Some((previous_screen_id, previous_bounds)) =
+                            self.native_screen_at(previous_x, previous_y)
+                        {
+                            let local_x = (previous_x - f64::from(previous_bounds.x))
+                                .clamp(0.0, f64::from(previous_bounds.width.saturating_sub(1)));
+                            let local_y = (previous_y - f64::from(previous_bounds.y))
+                                .clamp(0.0, f64::from(previous_bounds.height.saturating_sub(1)));
                             control.pointer =
-                                Some(PointerPosition::new(screen_id.clone(), local_x, local_y));
-                            previous_native = Some((x, y));
+                                Some(PointerPosition::new(previous_screen_id, local_x, local_y));
                         }
+                    } else {
+                        let local_x = (x - f64::from(bounds.x))
+                            .clamp(0.0, f64::from(bounds.width.saturating_sub(1)));
+                        let local_y = (y - f64::from(bounds.y))
+                            .clamp(0.0, f64::from(bounds.height.saturating_sub(1)));
+                        control.pointer =
+                            Some(PointerPosition::new(screen_id.clone(), local_x, local_y));
+                        previous_native = Some((x, y));
                     }
                 }
 

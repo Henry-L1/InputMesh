@@ -4,7 +4,7 @@ version = "0.1.4"
 description = "Secure peer-to-peer keyboard and mouse sharing for Windows and macOS"
 authors = ["InputMesh contributors"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "PolyForm-Noncommercial-1.0.0"
 
 [lib]

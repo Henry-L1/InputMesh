@@ -425,21 +425,20 @@ pub fn key_name_to_hid(name: &str) -> Option<u16> {
             _ => None,
         };
     }
-    if let Some(function) = name.strip_prefix('F') {
-        if let Ok(index) = function.parse::<u16>() {
-            if (1..=12).contains(&index) {
-                return Some(0x3a + index - 1);
-            }
-        }
+    if let Some(function) = name.strip_prefix('F')
+        && let Ok(index) = function.parse::<u16>()
+        && (1..=12).contains(&index)
+    {
+        return Some(0x3a + index - 1);
     }
-    if let Some(number) = name.strip_prefix("Kp") {
-        if let Ok(index) = number.parse::<u16>() {
-            return match index {
-                1..=9 => Some(0x59 + index - 1),
-                0 => Some(0x62),
-                _ => None,
-            };
-        }
+    if let Some(number) = name.strip_prefix("Kp")
+        && let Ok(index) = number.parse::<u16>()
+    {
+        return match index {
+            1..=9 => Some(0x59 + index - 1),
+            0 => Some(0x62),
+            _ => None,
+        };
     }
     Some(match name {
         "Return" => 0x28,

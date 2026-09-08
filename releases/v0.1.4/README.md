@@ -1,6 +1,6 @@
 # InputMesh v0.1.4 release manifest
 
-Tag, application metadata and every asset in this directory use version `0.1.4`. Windows and macOS artifacts were built from the same source candidate and are published together in one GitHub Release.
+Tag, application metadata and every recorded asset in this directory use version `0.1.4`. Windows and macOS artifacts were built from the same source candidate. The unsigned binaries were withdrawn from the public GitHub Release after the pre-public dependency audit; their checksums remain here only as a historical test record.
 
 | Platform | Architecture | Assets | Checksums |
 | --- | --- | --- | --- |
@@ -9,4 +9,4 @@ Tag, application metadata and every asset in this directory use version `0.1.4`.
 
 `pnpm release:check` verifies that `package.json`, Cargo, Tauri, the tag and all asset names remain aligned before CI builds the project.
 
-These v0.1.4 files are unsigned public preview artifacts for noncommercial testing: the macOS build is ad-hoc signed and not notarized; the Windows installers are not Authenticode-signed. Verify the published SHA-256 values before installation.
+The public v0.1.4 Release is source-only. Build from the current source tree; do not obtain the withdrawn binaries from third-party mirrors.
