@@ -1,2 +1,2 @@
-77985272da530e515243afc28da852db542e2d4ae299d301cde1a640193f0294  InputMesh-v0.1.4-macos-arm64.dmg
-f1b9b206711824b0b1237611ac71d10c18344bf966e3882650c1ef0bf61e0533  InputMesh-v0.1.4-macos-arm64.app.zip
+b35d47541936442bfa4a8f2cb3a268d8f0f4e30cbeba79b0c1e7561d0c1cfdc6  InputMesh-v0.1.4-macos-arm64.app.zip
+e4c7eb001ec6dbb4388bad03ec076bd2a1bc2acc9ffe5eb773d6577253c999d1  InputMesh-v0.1.4-macos-arm64.dmg

@@ -12,11 +12,11 @@
       "assets": [
         {
           "name": "InputMesh-v0.1.4-windows-x64-setup.exe",
-          "sha256": "c832d3cc452ffdf9fcec28f57ddc892a27702154f4684668bf1452d795175e7f"
+          "sha256": "f8ecceb4fd77bbe2d56a735d3318f2922d212d0428a290570a2859cbc5e59401"
         },
         {
           "name": "InputMesh-v0.1.4-windows-x64.msi",
-          "sha256": "581536ba31d9b3ef4515f24c904c7a6267665e73d696e2d77ee19dbb6283eca2"
+          "sha256": "c01bc241ff9d86aca5876eeeb1819e577bccc5d1f537c43ec33652a457371b5b"
         }
       ]
     },
@@ -29,11 +29,11 @@
       "assets": [
         {
           "name": "InputMesh-v0.1.4-macos-arm64.dmg",
-          "sha256": "77985272da530e515243afc28da852db542e2d4ae299d301cde1a640193f0294"
+          "sha256": "e4c7eb001ec6dbb4388bad03ec076bd2a1bc2acc9ffe5eb773d6577253c999d1"
         },
         {
           "name": "InputMesh-v0.1.4-macos-arm64.app.zip",
-          "sha256": "f1b9b206711824b0b1237611ac71d10c18344bf966e3882650c1ef0bf61e0533"
+          "sha256": "b35d47541936442bfa4a8f2cb3a268d8f0f4e30cbeba79b0c1e7561d0c1cfdc6"
         }
       ]
     }

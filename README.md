@@ -30,6 +30,16 @@ Rust 应用运行时
 
 协议、控制权与屏幕坐标的设计见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，完整工程计划见 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)。
 
+## 下载
+
+请从 [GitHub Releases](https://github.com/Henry-L1/InputMesh/releases) 下载当前预览版：
+
+- macOS Apple Silicon（arm64）：DMG 或 APP ZIP。
+- Windows x64：NSIS 安装程序 EXE 或 MSI。
+- 每个平台均附带 SHA-256 校验清单。
+
+当前安装包尚未进行 Apple Developer ID 公证或 Windows Authenticode 签名，系统可能显示未知开发者警告。请只从本仓库的 Release 页面下载并核对 SHA-256；正式稳定发布前仍需完成平台厂商签名与公证。
+
 ## 本地开发
 
 前置条件：
@@ -60,7 +70,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 pnpm tauri build
 ```
 
-Windows 和 macOS 安装包应分别在对应系统或 CI runner 上构建。未签名的本地包只适合开发测试；公开分发前还需要 Apple Developer ID 签名/公证及 Windows 代码签名。
+Windows 和 macOS 安装包应分别在对应系统或 CI runner 上构建。未签名的本地包只适合开发测试；公开的未签名包必须标为预览版并说明风险，正式稳定发布前还需要 Apple Developer ID 签名/公证及 Windows 代码签名。
 
 ## 平台目录与发布对应关系
 
