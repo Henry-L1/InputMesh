@@ -1,0 +1,30 @@
+name: Rust Dependency Audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/audit.yml"
+      - "src-tauri/Cargo.toml"
+      - "src-tauri/Cargo.lock"
+  push:
+    paths:
+      - ".github/workflows/audit.yml"
+      - "src-tauri/Cargo.toml"
+      - "src-tauri/Cargo.lock"
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-audit:
+    name: rust-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/audit@v1
+        with:
+          file: src-tauri/Cargo.lock
+          createIssues: false

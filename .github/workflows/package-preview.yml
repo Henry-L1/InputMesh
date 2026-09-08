@@ -1,0 +1,99 @@
+name: Package Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing prerelease tag to build and upload
+        required: true
+        default: v0.1.4
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: package (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build
+      - name: Prepare release assets
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          version="${TAG#v}"
+          ditto -c -k --sequesterRsrc --keepParent \
+            src-tauri/target/release/bundle/macos/InputMesh.app \
+            "InputMesh-v${version}-macos-${arch}.app.zip"
+          cp src-tauri/target/release/bundle/dmg/*.dmg \
+            "InputMesh-v${version}-macos-${arch}.dmg"
+          shasum -a 256 \
+            "InputMesh-v${version}-macos-${arch}.app.zip" \
+            "InputMesh-v${version}-macos-${arch}.dmg" \
+            > "InputMesh-v${version}-macos-${arch}.sha256"
+      - name: Upload release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          gh release upload "$TAG" \
+            InputMesh-v${version}-macos-* \
+            --clobber
+
+  windows:
+    name: package (Windows)
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build
+      - name: Prepare release assets
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = $env:TAG.TrimStart("v")
+          Copy-Item (Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1).FullName "InputMesh-v$version-windows-x64-setup.exe"
+          Copy-Item (Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" | Select-Object -First 1).FullName "InputMesh-v$version-windows-x64.msi"
+          Get-FileHash "InputMesh-v$version-windows-x64-setup.exe", "InputMesh-v$version-windows-x64.msi" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } |
+            Set-Content "InputMesh-v$version-windows-x64.sha256"
+      - name: Upload release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = $env:TAG.TrimStart("v")
+          gh release upload $env:TAG "InputMesh-v$version-windows-x64-setup.exe" "InputMesh-v$version-windows-x64.msi" "InputMesh-v$version-windows-x64.sha256" --clobber
