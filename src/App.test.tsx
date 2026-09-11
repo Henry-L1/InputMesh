@@ -6,7 +6,9 @@ describe("InputMesh 前端", () => {
   it("在浏览器演示模式中完成权限授权、服务切换和设备配对", async () => {
     render(<App />);
 
-    expect(await screen.findByText("一套键鼠，穿梭所有屏幕")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "一套键鼠，穿梭多台电脑" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("可交互演示")).toBeInTheDocument();
 
     const permissionBanner = screen.getByRole("alert");

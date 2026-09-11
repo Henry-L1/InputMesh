@@ -149,7 +149,7 @@ function App() {
           <BrandMark />
           <div>
             <strong>InputMesh</strong>
-            <span>跨设备键鼠</span>
+            <span>一套键鼠，穿梭多台电脑</span>
           </div>
         </div>
 
@@ -328,7 +328,7 @@ function LayoutPage({
       <section className="welcome-row">
         <div>
           <span className="eyebrow">控制台</span>
-          <h1>一套键鼠，穿梭所有屏幕</h1>
+          <h1>一套键鼠，穿梭多台电脑</h1>
           <p>
             将屏幕拖到它们在桌面上的真实位置。指针越过相邻边缘时，控制会自然切换。
           </p>

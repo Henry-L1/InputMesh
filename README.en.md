@@ -2,6 +2,8 @@
 
 [简体中文](README.md) | English
 
+Chinese display name: **一套键鼠，穿梭多台电脑** ("One keyboard and mouse set, moving across multiple computers").
+
 InputMesh is a peer-to-peer keyboard and mouse sharing application for Windows and macOS. Run it on computers connected to the same trusted local network, arrange their displays on one canvas, and move the pointer across a configured edge to switch computers. Keyboard focus follows the pointer.
 
 The project is currently a preview release. InputMesh's original code is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE), for personal learning, research, testing, and other non-commercial use.

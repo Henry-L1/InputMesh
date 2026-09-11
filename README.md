@@ -2,6 +2,8 @@
 
 [English](README.en.md) | 简体中文
 
+中文显示名：**一套键鼠，穿梭多台电脑**
+
 InputMesh 是一个面向 Windows 与 macOS 的点对点键鼠共享应用。把应用运行在同一可信局域网内的电脑上，在画布中排列所有屏幕后，鼠标越过屏幕边缘即可切换到另一台电脑，键盘焦点也会一起切换。
 
 项目当前为预览版。InputMesh 自有代码采用 [PolyForm Noncommercial License 1.0.0](LICENSE)，适合个人学习、研究、测试和其他非商业用途。
