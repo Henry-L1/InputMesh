@@ -1,0 +1,2 @@
+4b9eb270836aa5a1c41f88f8f750da9a954fe9e3374c0eec95faca38f69ddccb  InputMesh-v0.1.6-macos-arm64.dmg
+d3096f703b8bce929ef8d753e2fab58fc496fd9531b09b94dd027f0e417717a7  InputMesh-v0.1.6-macos-arm64.app.zip

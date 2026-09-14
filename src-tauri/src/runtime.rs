@@ -30,11 +30,11 @@ use crate::{
     network::{ConnectionMetadata, LocalNode, NetworkEvent, NetworkService},
     protocol::{
         ButtonInput, ButtonState, CanonicalKeyCode, ControlClaim, ControlLease, Focus, HidKeyCode,
-        Input, InputEvent, KeyInput, KeyModifiers, KeyState, Layout, LayoutPlacement, Message,
-        PairApproval, PairReject, PairRequest, Platform, PointerButton, PointerMoveNormalized,
-        ScreenDescriptor, Screens, WheelInput, WheelUnit, WireMessage,
+        Input, InputEvent, KeyInput, KeyModifiers, KeyState, KeyboardInput, Layout,
+        LayoutPlacement, Message, PairApproval, PairReject, PairRequest, Platform, PointerButton,
+        PointerMoveNormalized, ScreenDescriptor, Screens, WheelInput, WheelUnit, WireMessage,
     },
-    topology::{Direction, PointerPosition, ScreenTopology, ScreenTransition},
+    topology::{Direction, PointerPosition, ScreenTopology, ScreenTransition, canonical_screens},
 };
 
 const SNAPSHOT_EVENT: &str = "snapshot://updated";
@@ -87,11 +87,13 @@ struct ControlState {
     lease_id: String,
     input_set_id: String,
     sequence: u64,
+    keyboard_sequence: u64,
     pointer: Option<PointerPosition>,
     last_native_pointer: Option<(f64, f64)>,
     pressed_hid: HashSet<u16>,
     claim_announced: bool,
     last_remote_sequence: u64,
+    last_remote_keyboard_sequences: HashMap<DeviceId, u64>,
     edge_attempt: Option<EdgeAttempt>,
     pointer_parking: Option<(f64, f64)>,
     remote_pressed_keys: HashSet<String>,
@@ -108,6 +110,7 @@ impl ControlState {
             lease_id: format!("{generation:020}:{local_id}"),
             input_set_id: format!("physical:{local_id}"),
             sequence: 0,
+            keyboard_sequence: 0,
             pointer: primary_screen.map(|screen| {
                 PointerPosition::new(
                     screen.id.clone(),
@@ -119,6 +122,7 @@ impl ControlState {
             pressed_hid: HashSet::new(),
             claim_announced: false,
             last_remote_sequence: 0,
+            last_remote_keyboard_sequences: HashMap::new(),
             edge_attempt: None,
             pointer_parking: None,
             remote_pressed_keys: HashSet::new(),
@@ -130,6 +134,11 @@ impl ControlState {
     fn next_sequence(&mut self) -> u64 {
         self.sequence = self.sequence.saturating_add(1);
         self.sequence
+    }
+
+    fn next_keyboard_sequence(&mut self) -> u64 {
+        self.keyboard_sequence = self.keyboard_sequence.saturating_add(1);
+        self.keyboard_sequence
     }
 }
 
@@ -199,7 +208,7 @@ impl AppCore {
                 .map(|pointer| pointer.screen_id.clone()),
             listen_port: None,
             permission,
-            screens: topology.screens().to_vec(),
+            screens: canonical_screens(topology.screens()),
             peers: Vec::new(),
             settings: config.settings.clone(),
             logs: vec![ActivityLog {
@@ -714,6 +723,7 @@ impl AppCore {
             Message::ControlLease(lease) => self.on_control_lease(peer_id, lease),
             Message::Focus(focus) => self.on_remote_focus(peer_id, focus),
             Message::Input(input) => self.on_remote_input(peer_id, input),
+            Message::KeyboardInput(input) => self.on_remote_keyboard_input(peer_id, input),
             Message::Pong(pong) => {
                 let latency = unix_millis()
                     .saturating_sub(pong.nonce)
@@ -867,13 +877,12 @@ impl AppCore {
             };
             let _ = topology.upsert_screen(screen);
         }
-        let peer_screens: Vec<_> = topology
-            .screens()
+        let all_screens = canonical_screens(topology.screens());
+        let peer_screens: Vec<_> = all_screens
             .iter()
             .filter(|screen| screen.owner_device_id == peer_id)
             .cloned()
             .collect();
-        let all_screens = topology.screens().to_vec();
         drop(topology);
         self.update_snapshot(|snapshot| {
             snapshot.screens = all_screens;
@@ -1165,24 +1174,62 @@ impl AppCore {
         }
     }
 
+    fn on_remote_keyboard_input(&self, peer_id: DeviceId, input: KeyboardInput) {
+        if !self.snapshot.read().sharing_enabled || !self.peer_is_connected(peer_id) {
+            return;
+        }
+        let local_id = self.snapshot.read().local_device.id;
+        let Some(screen) = self.topology.read().screen(&input.screen_id).cloned() else {
+            return;
+        };
+        if screen.owner_device_id != local_id || !screen.is_available() {
+            return;
+        }
+
+        let mut control = self.control.lock();
+        if control
+            .pointer
+            .as_ref()
+            .is_none_or(|pointer| pointer.screen_id != input.screen_id)
+        {
+            return;
+        }
+        let last_sequence = control
+            .last_remote_keyboard_sequences
+            .entry(peer_id)
+            .or_default();
+        if input.sequence <= *last_sequence {
+            return;
+        }
+        *last_sequence = input.sequence;
+        drop(control);
+
+        let Some(native) = key_input_to_native(input.event) else {
+            return;
+        };
+        tracing::debug!(
+            %peer_id,
+            screen_id = %input.screen_id,
+            code = ?native,
+            "injecting remote keyboard input"
+        );
+        self.track_remote_input(&native);
+        if let Err(error) = self.input.inject(native) {
+            self.add_log(LogLevel::Warning, error);
+        }
+    }
+
     fn handle_local_input(&self, event: NativeInputEvent) -> bool {
         if !self.snapshot.read().sharing_enabled {
             return false;
         }
         let local_id = self.snapshot.read().local_device.id;
+        if matches!(&event, NativeInputEvent::Key { .. }) {
+            return self.handle_local_keyboard(event, local_id);
+        }
         let settings = self.snapshot.read().settings.clone();
-        let focused_screen_id = self
-            .control
-            .lock()
-            .pointer
-            .as_ref()
-            .map(|pointer| pointer.screen_id.clone());
-        let focused_on_local_screen = focused_screen_id
-            .as_deref()
-            .and_then(|screen_id| self.screen_owner(screen_id))
-            == Some(local_id);
-        let pointer_can_reclaim =
-            local_input_can_reclaim_control(&event, &settings, focused_on_local_screen);
+        let pointer_can_reclaim = settings.take_control_on_local_input
+            || matches!(&event, NativeInputEvent::PointerMoved { .. });
         let takeover_pointer = self.local_pointer_for_input(&event, local_id);
         let (claim, releases, claimed_screen_id) = {
             let mut control = self.control.lock();
@@ -1573,6 +1620,48 @@ impl AppCore {
         }
     }
 
+    /// Keyboard events never acquire the mouse lease. The logical pointer is
+    /// the sole routing decision: local target means let the OS receive the
+    /// physical key, remote target means send the key directly to that screen's
+    /// owner. This allows both computers' keyboards to work simultaneously.
+    fn handle_local_keyboard(&self, event: NativeInputEvent, local_id: DeviceId) -> bool {
+        let mut control = self.control.lock();
+        let Some(screen_id) = control
+            .pointer
+            .as_ref()
+            .map(|pointer| pointer.screen_id.clone())
+        else {
+            return false;
+        };
+        let Some(owner) = self.screen_owner(&screen_id) else {
+            return false;
+        };
+        if owner == local_id {
+            update_pressed_keys_for_wire(&event, &mut control.pressed_hid);
+            return false;
+        }
+        let Some(input_event) = native_to_wire(event, &mut control.pressed_hid) else {
+            return false;
+        };
+        let message = WireMessage::new(Message::KeyboardInput(KeyboardInput {
+            screen_id: screen_id.clone(),
+            sequence: control.next_keyboard_sequence(),
+            event: match input_event {
+                InputEvent::Key(key) => key,
+                _ => return false,
+            },
+        }));
+        drop(control);
+        let sent = self.send_to(owner, message).is_ok();
+        tracing::debug!(
+            %owner,
+            %screen_id,
+            sent,
+            "routed local keyboard input by logical pointer focus"
+        );
+        sent
+    }
+
     fn accepts_input(&self, peer_id: DeviceId, lease_id: &str) -> bool {
         if !self.peer_is_connected(peer_id) {
             return false;
@@ -1810,6 +1899,10 @@ impl AppCore {
 
     fn on_disconnected(&self, peer_id: DeviceId, reason: &str) {
         self.pair_sessions.write().remove(&peer_id);
+        self.control
+            .lock()
+            .last_remote_keyboard_sequences
+            .remove(&peer_id);
         {
             let mut topology = self.topology.write();
             let remote_ids: Vec<_> = topology
@@ -1824,7 +1917,7 @@ impl AppCore {
                     let _ = topology.upsert_screen(screen);
                 }
             }
-            let screens = topology.screens().to_vec();
+            let screens = canonical_screens(topology.screens());
             drop(topology);
             self.update_snapshot(|snapshot| snapshot.screens = screens);
         }
@@ -1858,12 +1951,16 @@ impl AppCore {
     fn local_screens_message(&self) -> WireMessage {
         let local_id = self.snapshot.read().local_device.id;
         let native = self.native_screens.read();
-        let screens = self
+        let local_screens: Vec<_> = self
             .topology
             .read()
             .screens()
             .iter()
             .filter(|screen| screen.owner_device_id == local_id)
+            .cloned()
+            .collect();
+        let screens = canonical_screens(&local_screens)
+            .into_iter()
             .map(|screen| {
                 let bounds = native.get(&screen.id);
                 ScreenDescriptor {
@@ -1932,7 +2029,7 @@ impl AppCore {
     }
 
     fn commit_topology(&self, topology: ScreenTopology) -> Result<(), String> {
-        let screens = topology.screens().to_vec();
+        let screens = canonical_screens(topology.screens());
         let current_placements = topology.placements();
         let mut next_config = self.config.read().clone();
         next_config.screen_layout.retain(|saved| {
@@ -2232,21 +2329,6 @@ fn edge_transition_ready(
     }
 }
 
-fn local_input_can_reclaim_control(
-    event: &NativeInputEvent,
-    settings: &SharingSettings,
-    focused_on_local_screen: bool,
-) -> bool {
-    // A keyboard physically attached to the receiving computer should type at
-    // the screen already focused by the remote pointer without stealing the
-    // pointer's controller lease. Otherwise the controller's parked/hidden
-    // cursor reappears on its own desktop and the next mouse event jumps back.
-    if focused_on_local_screen && matches!(event, NativeInputEvent::Key { .. }) {
-        return false;
-    }
-    settings.take_control_on_local_input || matches!(event, NativeInputEvent::PointerMoved { .. })
-}
-
 const SCROLL_PIXELS_PER_LINE: f64 = 40.0;
 
 fn translate_remote_wheel(
@@ -2488,6 +2570,20 @@ fn native_to_wire(event: NativeInputEvent, pressed_hid: &mut HashSet<u16>) -> Op
     }
 }
 
+fn key_input_to_native(key: KeyInput) -> Option<NativeInputEvent> {
+    let CanonicalKeyCode::Hid(code) = key.code else {
+        return None;
+    };
+    if code.usage_page != 0x07 {
+        return None;
+    }
+    let name = hid_to_key_name(code.usage)?;
+    Some(NativeInputEvent::Key {
+        code: name,
+        pressed: key.state == KeyState::Pressed,
+    })
+}
+
 fn update_pressed_keys_for_wire(event: &NativeInputEvent, pressed_hid: &mut HashSet<u16>) {
     if let NativeInputEvent::Key { code, pressed } = event
         && let Some(usage) = key_name_to_hid(code)
@@ -2617,45 +2713,21 @@ mod tests {
     }
 
     #[test]
-    fn physical_pointer_motion_reclaims_control_even_when_priority_is_disabled() {
-        let settings = SharingSettings {
-            take_control_on_local_input: false,
-            ..SharingSettings::default()
+    fn keyboard_wire_events_round_trip_without_mouse_lease() {
+        let key = KeyInput {
+            code: CanonicalKeyCode::Hid(HidKeyCode {
+                usage_page: 0x07,
+                usage: 0x04,
+            }),
+            state: KeyState::Pressed,
+            repeat: false,
+            modifiers: KeyModifiers::default(),
         };
-        let pointer = NativeInputEvent::PointerMoved {
-            x: 10.0,
-            y: 20.0,
-            delta_x: Some(0.0),
-            delta_y: Some(0.0),
-        };
-        let key = NativeInputEvent::Key {
-            code: "KeyA".into(),
-            pressed: true,
-        };
-
-        assert!(local_input_can_reclaim_control(&pointer, &settings, false));
-        assert!(!local_input_can_reclaim_control(&key, &settings, false));
-    }
-
-    #[test]
-    fn target_keyboard_does_not_steal_a_remote_pointer_focused_locally() {
-        let settings = SharingSettings {
-            take_control_on_local_input: true,
-            ..SharingSettings::default()
-        };
-        let key = NativeInputEvent::Key {
-            code: "KeyA".into(),
-            pressed: true,
-        };
-        let pointer = NativeInputEvent::PointerMoved {
-            x: 10.0,
-            y: 20.0,
-            delta_x: Some(1.0),
-            delta_y: Some(0.0),
-        };
-
-        assert!(!local_input_can_reclaim_control(&key, &settings, true));
-        assert!(local_input_can_reclaim_control(&pointer, &settings, true));
+        let native = key_input_to_native(key).unwrap();
+        assert!(matches!(
+            native,
+            NativeInputEvent::Key { code, pressed: true } if code == "KeyA"
+        ));
     }
 
     #[test]

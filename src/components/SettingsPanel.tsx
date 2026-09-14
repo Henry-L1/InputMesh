@@ -103,12 +103,12 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps) {
 
         <div className="toggle-setting">
           <div>
-            <strong>本机输入优先</strong>
-            <p>检测到目标电脑本地键鼠操作时，立即交还控制。</p>
+            <strong>本机鼠标优先</strong>
+            <p>检测到目标电脑本地鼠标操作时，立即交还控制；键盘始终跟随当前指针所在屏幕。</p>
           </div>
           <Toggle
             checked={draft.takeControlOnLocalInput}
-            label="本机输入优先"
+            label="本机鼠标优先"
             onChange={(checked) =>
               setDraft((current) => ({ ...current, takeControlOnLocalInput: checked }))
             }

@@ -60,6 +60,12 @@ Repeat with a mouse button held, then test click, wheel, key press/release and
 the `Ctrl + Alt + Esc` emergency release path. Release every injected key and
 button in cleanup even if a test fails.
 
+For keyboard-source independence, keep the pointer on a Windows screen and
+send a harmless key from both the Windows and macOS keyboards; then repeat
+with the pointer on a macOS screen. In both cases, verify the key is observed
+on the pointer's screen and that the pointer lease/screen does not jump when
+the keyboard source changes. Repeat once with “本机鼠标优先” disabled.
+
 On Windows, run `tools/windows/run-windows-input-probe.ps1` in the signed-in user's
 interactive session. It must report the complete virtual desktop (including a
 negative origin when present), move and restore the cursor within one pixel,

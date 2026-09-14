@@ -10,6 +10,7 @@ const cargoVersion = read("src-tauri/Cargo.toml").match(
 )?.[1];
 const manifestPath = `releases/v${packageVersion}/manifest.json`;
 const manifest = JSON.parse(read(manifestPath));
+const draftManifest = manifest.status === "draft";
 
 const failures = [];
 for (const [source, version] of [
@@ -37,7 +38,8 @@ for (const platform of ["windows", "macos"]) {
     if (!asset.name.includes(`v${packageVersion}`)) {
       failures.push(`${asset.name} does not contain v${packageVersion}`);
     }
-    if (!/^[a-f0-9]{64}$/.test(asset.sha256)) {
+    const hasHash = typeof asset.sha256 === "string" && /^[a-f0-9]{64}$/.test(asset.sha256);
+    if (!hasHash && !(draftManifest && asset.sha256 === null)) {
       failures.push(`${asset.name} has an invalid SHA-256`);
     }
   }
@@ -48,4 +50,8 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`release v${packageVersion}: Windows and macOS manifests are aligned`);
+console.log(
+  draftManifest
+    ? `release v${packageVersion}: draft Windows and macOS manifest is version-aligned; artifact hashes are pending`
+    : `release v${packageVersion}: Windows and macOS manifests are aligned`,
+);

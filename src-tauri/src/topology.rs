@@ -104,6 +104,25 @@ pub struct ScreenTopology {
 /// Concise alias for callers that already live in the topology module's domain.
 pub type Topology = ScreenTopology;
 
+/// Returns screens in the deterministic order used by the console and layout
+/// messages. Native display enumeration is not stable across Windows and
+/// macOS, so the shared canvas coordinates must be the primary ordering key.
+pub fn canonical_screens(screens: &[ScreenInfo]) -> Vec<ScreenInfo> {
+    let mut ordered = screens.to_vec();
+    ordered.sort_by(|left, right| {
+        left.y
+            .cmp(&right.y)
+            .then_with(|| left.x.cmp(&right.x))
+            .then_with(|| {
+                left.owner_device_id
+                    .as_u128()
+                    .cmp(&right.owner_device_id.as_u128())
+            })
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    ordered
+}
+
 impl ScreenTopology {
     pub fn new(screens: Vec<ScreenInfo>) -> Result<Self, TopologyError> {
         validate_screens(&screens)?;
@@ -217,8 +236,8 @@ impl ScreenTopology {
     }
 
     pub fn placements(&self) -> Vec<ScreenPlacement> {
-        self.screens
-            .iter()
+        canonical_screens(&self.screens)
+            .into_iter()
             .map(|screen| ScreenPlacement {
                 screen_id: screen.id.clone(),
                 owner_device_id: screen.owner_device_id,
@@ -850,6 +869,23 @@ mod tests {
         assert_eq!(fresh.screen("left").unwrap().x, -1920);
         assert_eq!(fresh.screen("right").unwrap().y, 180);
         assert!(!fresh.screen("right").unwrap().enabled);
+    }
+
+    #[test]
+    fn placements_use_shared_canvas_order_not_native_inventory_order() {
+        let topology = ScreenTopology::new(vec![
+            screen("bottom", 0, 100, 100, 100, 2),
+            screen("right", 100, 0, 100, 100, 2),
+            screen("left", 0, 0, 100, 100, 1),
+        ])
+        .unwrap();
+
+        let ids: Vec<_> = topology
+            .placements()
+            .into_iter()
+            .map(|placement| placement.screen_id)
+            .collect();
+        assert_eq!(ids, ["left", "right", "bottom"]);
     }
 
     #[test]

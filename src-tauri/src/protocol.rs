@@ -78,6 +78,14 @@ impl WireMessage {
                 validate_normalized(payload.normalized_y, "focus.normalizedY")
             }
             Message::Input(payload) => payload.event.validate(),
+            Message::KeyboardInput(payload) => {
+                if payload.screen_id.trim().is_empty() {
+                    return Err(ProtocolError::InvalidMessage(
+                        "keyboardInput.screenId must not be empty".into(),
+                    ));
+                }
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -97,6 +105,9 @@ pub enum Message {
     ControlRelease(ControlRelease),
     Focus(Focus),
     Input(Input),
+    /// Keyboard-only input follows the shared pointer focus without acquiring
+    /// or replacing the mouse control lease.
+    KeyboardInput(KeyboardInput),
     Ping(Ping),
     Pong(Pong),
     Error(ErrorMessage),
@@ -230,6 +241,15 @@ pub struct Input {
     /// Monotonically increasing within a lease; stale or duplicate input is dropped.
     pub sequence: u64,
     pub event: InputEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyboardInput {
+    pub screen_id: String,
+    /// Monotonically increasing for the sending device while this process is running.
+    pub sequence: u64,
+    pub event: KeyInput,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -517,6 +537,27 @@ mod tests {
             }],
         }));
         let encoded = message.to_json_vec().unwrap();
+        assert_eq!(WireMessage::from_json_slice(&encoded).unwrap(), message);
+    }
+
+    #[test]
+    fn keyboard_input_is_a_focus_routed_message_without_a_control_lease() {
+        let message = WireMessage::new(Message::KeyboardInput(KeyboardInput {
+            screen_id: "device:screen".into(),
+            sequence: 3,
+            event: KeyInput {
+                code: CanonicalKeyCode::Hid(HidKeyCode {
+                    usage_page: 0x07,
+                    usage: 0x04,
+                }),
+                state: KeyState::Pressed,
+                repeat: false,
+                modifiers: KeyModifiers::default(),
+            },
+        }));
+        let encoded = message.to_json_vec().unwrap();
+        let json = std::str::from_utf8(&encoded).unwrap();
+        assert!(json.contains("\"type\":\"keyboardInput\""));
         assert_eq!(WireMessage::from_json_slice(&encoded).unwrap(), message);
     }
 }

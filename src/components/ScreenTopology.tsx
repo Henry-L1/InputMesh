@@ -63,6 +63,17 @@ export function ScreenTopology({
     height: 330,
   });
   const [drag, setDrag] = useState<DragState | null>(null);
+  const orderedScreens = useMemo(
+    () =>
+      [...screens].sort(
+        (left, right) =>
+          left.y - right.y ||
+          left.x - right.x ||
+          left.ownerDeviceId.localeCompare(right.ownerDeviceId) ||
+          left.id.localeCompare(right.id),
+      ),
+    [screens],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -89,7 +100,7 @@ export function ScreenTopology({
   }, [drag, screens]);
 
   const layout = useMemo(() => {
-    if (screens.length === 0) {
+    if (orderedScreens.length === 0) {
       return {
         minX: 0,
         minY: 0,
@@ -97,10 +108,10 @@ export function ScreenTopology({
       };
     }
 
-    const minX = Math.min(...screens.map((screen) => screen.x));
-    const minY = Math.min(...screens.map((screen) => screen.y));
-    const maxX = Math.max(...screens.map((screen) => screen.x + screen.width));
-    const maxY = Math.max(...screens.map((screen) => screen.y + screen.height));
+    const minX = Math.min(...orderedScreens.map((screen) => screen.x));
+    const minY = Math.min(...orderedScreens.map((screen) => screen.y));
+    const maxX = Math.max(...orderedScreens.map((screen) => screen.x + screen.width));
+    const maxY = Math.max(...orderedScreens.map((screen) => screen.y + screen.height));
     const contentWidth = Math.max(maxX - minX, 1);
     const contentHeight = Math.max(maxY - minY, 1);
     const availableWidth = Math.max(canvasSize.width - CANVAS_PADDING * 2, 280);
@@ -111,7 +122,7 @@ export function ScreenTopology({
       minY,
       scale: Math.min(availableWidth / contentWidth, availableHeight / contentHeight, 0.16),
     };
-  }, [canvasSize, screens]);
+  }, [canvasSize, orderedScreens]);
 
   const visualFor = (screen: ScreenInfo) => {
     const position = drag?.screenId === screen.id ? drag : screen;
@@ -182,7 +193,7 @@ export function ScreenTopology({
     onMove(screen.id, screen.x + offset[0], screen.y + offset[1]);
   };
 
-  if (screens.length === 0) {
+  if (orderedScreens.length === 0) {
     return (
       <div className="topology-empty">
         <Monitor size={26} />
@@ -199,12 +210,12 @@ export function ScreenTopology({
       </div>
 
       <svg className="topology-links" aria-hidden="true">
-        {screens.slice(1).map((screen, index) => {
+        {orderedScreens.slice(1).map((screen, index) => {
           const current = visualFor(screen);
-          const previous = visualFor(screens[index]);
+          const previous = visualFor(orderedScreens[index]);
           return (
             <line
-              key={`${screens[index].id}-${screen.id}`}
+              key={`${orderedScreens[index].id}-${screen.id}`}
               x1={previous.left + previous.width / 2}
               y1={previous.top + previous.height / 2}
               x2={current.left + current.width / 2}
@@ -214,7 +225,7 @@ export function ScreenTopology({
         })}
       </svg>
 
-      {screens.map((screen) => {
+      {orderedScreens.map((screen) => {
         const visual = visualFor(screen);
         const isLocal = screen.ownerDeviceId === localDeviceId;
         const isActive = screen.id === activeScreenId;
